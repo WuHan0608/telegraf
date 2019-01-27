@@ -28,7 +28,7 @@ const (
 	description  = "Plugin that scrapes Google's v3 monitoring API."
 	sampleConfig = `
 ## GCP Project (required - must be prefixed with "projects/")
-project = "projects/{project_id_or_number}"
+project = "{project_id_or_number}"
 
 ## API rate limit. On a default project, it seems that a single user can make
 ## ~14 requests per second. This might be configurable. Each API request can
@@ -163,66 +163,54 @@ type (
 
 	// metricClient is convenient for testing
 	metricClient interface {
-		ListMetricDescriptors(ctx context.Context, req *monitoringpb.ListMetricDescriptorsRequest) (<-chan *metricpb.MetricDescriptor, error)
-		ListTimeSeries(ctx context.Context, req *monitoringpb.ListTimeSeriesRequest) (<-chan *monitoringpb.TimeSeries, error)
+		ListMetricDescriptors(req *monitoringpb.ListMetricDescriptorsRequest) ([]*metricpb.MetricDescriptor, error)
+		ListTimeSeries(req *monitoringpb.ListTimeSeriesRequest) ([]*monitoringpb.TimeSeries, error)
 		Close() error
 	}
 )
 
 // ListMetricDescriptors implements metricClient interface
 func (c *stackdriverMetricClient) ListMetricDescriptors(
-	ctx context.Context,
 	req *monitoringpb.ListMetricDescriptorsRequest,
-) (<-chan *metricpb.MetricDescriptor, error) {
-	mdChan := make(chan *metricpb.MetricDescriptor, 1000)
+) ([]*metricpb.MetricDescriptor, error) {
+	var metricDescriptorList []*metricpb.MetricDescriptor
 
-	go func() {
-		// Channel must be closed for safety
-		defer close(mdChan)
-
-		// Iterate over metric descriptors and send them to buffered channel
-		mdResp := c.conn.ListMetricDescriptors(ctx, req)
-		for {
-			mdDesc, mdErr := mdResp.Next()
-			if mdErr != nil {
-				if mdErr != iterator.Done {
-					log.Printf("D! Request %s failure: %s\n", req.String(), mdErr)
-				}
-				break
+	resp := c.conn.ListMetricDescriptors(context.Background(), req)
+	for {
+		desc, err := resp.Next()
+		if err != nil {
+			if err != iterator.Done {
+				log.Printf("E! [inputs.stackdriver] Listing metric descriptors error: %v", err)
+				return nil, err
 			}
-			mdChan <- mdDesc
+			break
 		}
-	}()
+		metricDescriptorList = append(metricDescriptorList, desc)
+	}
 
-	return mdChan, nil
+	return metricDescriptorList, nil
 }
 
 // ListTimeSeries implements metricClient interface
 func (c *stackdriverMetricClient) ListTimeSeries(
-	ctx context.Context,
 	req *monitoringpb.ListTimeSeriesRequest,
-) (<-chan *monitoringpb.TimeSeries, error) {
-	tsChan := make(chan *monitoringpb.TimeSeries, 1000)
+) ([]*monitoringpb.TimeSeries, error) {
+	var timeSeriesList []*monitoringpb.TimeSeries
 
-	go func() {
-		// Channel must be closed for safety
-		defer close(tsChan)
-
-		// Iterate over timeseries and send them to buffered channel
-		tsResp := c.conn.ListTimeSeries(ctx, req)
-		for {
-			tsDesc, tsErr := tsResp.Next()
-			if tsErr != nil {
-				if tsErr != iterator.Done {
-					log.Printf("D! Request %s failure: %s\n", req.String(), tsErr)
-				}
-				break
+	resp := c.conn.ListTimeSeries(context.Background(), req)
+	for {
+		ts, err := resp.Next()
+		if err != nil {
+			if err != iterator.Done {
+				log.Printf("E! [inputs.stackdriver] Listing time series error: %v", err)
+				return nil, err
 			}
-			tsChan <- tsDesc
+			break
 		}
-	}()
+		timeSeriesList = append(timeSeriesList, ts)
+	}
 
-	return tsChan, nil
+	return timeSeriesList, nil
 }
 
 // Close implements metricClient interface
@@ -374,7 +362,7 @@ func (s *Stackdriver) newTimeSeriesConf(metricType string) *timeSeriesConf {
 		StartTime: &googlepbts.Timestamp{Seconds: s.windowStart.Unix()},
 	}
 	tsReq := &monitoringpb.ListTimeSeriesRequest{
-		Name:     s.Project,
+		Name:     fmt.Sprintf("projects/%s", s.Project),
 		Filter:   filter,
 		Interval: interval,
 	}
@@ -510,7 +498,7 @@ func (s *Stackdriver) generatetimeSeriesConfs() ([]*timeSeriesConf, error) {
 	}
 
 	ret := []*timeSeriesConf{}
-	req := &monitoringpb.ListMetricDescriptorsRequest{Name: s.Project}
+	req := &monitoringpb.ListMetricDescriptorsRequest{Name: fmt.Sprintf("projects/%s", s.Project)}
 
 	filters := s.newListMetricDescriptorsFilters()
 	if len(filters) == 0 {
@@ -523,12 +511,12 @@ func (s *Stackdriver) generatetimeSeriesConfs() ([]*timeSeriesConf, error) {
 		// this is more effecient than iterating over
 		// all metric descriptors
 		req.Filter = filter
-		mdRespChan, err := s.client.ListMetricDescriptors(s.ctx, req)
+		metricDescriptorList, err := s.client.ListMetricDescriptors(req)
 		if err != nil {
 			return nil, err
 		}
 
-		for metricDescriptor := range mdRespChan {
+		for _, metricDescriptor := range metricDescriptorList {
 			metricType := metricDescriptor.Type
 			valueType := metricDescriptor.ValueType
 
@@ -570,31 +558,31 @@ func (s *Stackdriver) scrapeTimeSeries(acc telegraf.Accumulator,
 	tsReq := tsConf.listTimeSeriesRequest
 	measurement := tsConf.measurement
 	fieldPrefix := tsConf.fieldPrefix
-	tsRespChan, err := s.client.ListTimeSeries(s.ctx, tsReq)
+	timeSeriesList, err := s.client.ListTimeSeries(tsReq)
 	if err != nil {
 		return err
 	}
 
-	for tsDesc := range tsRespChan {
+	for _, timeSeries := range timeSeriesList {
 		tags := map[string]string{
-			"resource_type": tsDesc.Resource.Type,
+			"resource_type": timeSeries.Resource.Type,
 		}
-		for k, v := range tsDesc.Resource.Labels {
+		for k, v := range timeSeries.Resource.Labels {
 			if s.includeTag(k) {
 				tags[k] = v
 			}
 		}
-		for k, v := range tsDesc.Metric.Labels {
+		for k, v := range timeSeries.Metric.Labels {
 			if s.includeTag(k) {
 				tags[k] = v
 			}
 		}
-		for _, p := range tsDesc.Points {
+		for _, p := range timeSeries.Points {
 			ts := time.Unix(p.Interval.EndTime.Seconds, 0)
 
 			var fields map[string]interface{}
 
-			if tsDesc.ValueType == metricpb.MetricDescriptor_DISTRIBUTION {
+			if timeSeries.ValueType == metricpb.MetricDescriptor_DISTRIBUTION {
 				val := p.Value.GetDistributionValue()
 				fields = s.scrapeDistribution(fieldPrefix, val)
 			} else {
@@ -602,7 +590,7 @@ func (s *Stackdriver) scrapeTimeSeries(acc telegraf.Accumulator,
 
 				// Types that are valid to be assigned to Value
 				// See: https://godoc.org/google.golang.org/genproto/googleapis/monitoring/v3#TypedValue
-				switch tsDesc.ValueType {
+				switch timeSeries.ValueType {
 				case metricpb.MetricDescriptor_BOOL:
 					field = p.Value.GetBoolValue()
 				case metricpb.MetricDescriptor_INT64:

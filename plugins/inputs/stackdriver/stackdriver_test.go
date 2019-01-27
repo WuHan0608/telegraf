@@ -27,77 +27,63 @@ import (
 type mockGatherStackdriverClient struct{}
 
 func (c *mockGatherStackdriverClient) ListMetricDescriptors(
-	ctx context.Context,
 	req *monitoringpb.ListMetricDescriptorsRequest,
-) (<-chan *metricpb.MetricDescriptor, error) {
+) ([]*metricpb.MetricDescriptor, error) {
 	switch req.Name {
-	case "listMetricDescriptorsError":
+	case "projects/listMetricDescriptorsError":
 		return nil, errors.New("List MetricDescriptors Error")
-	case "listTimeSeriesError":
-		respChan := make(chan *metricpb.MetricDescriptor, 1)
-		go func() {
-			defer close(respChan)
-			respChan <- &metricpb.MetricDescriptor{}
-		}()
-		return respChan, nil
+	case "projects/listTimeSeriesError":
+		metricDescriptorList := []*metricpb.MetricDescriptor{
+			new(metricpb.MetricDescriptor),
+		}
+		return metricDescriptorList, nil
 	case "projects/distribution":
-		respChan := make(chan *metricpb.MetricDescriptor, 1)
-		go func() {
-			defer close(respChan)
-			respChan <- &metricpb.MetricDescriptor{
+		metricDescriptorList := []*metricpb.MetricDescriptor{
+			&metricpb.MetricDescriptor{
 				Type:      "testing/distribution",
 				ValueType: metricpb.MetricDescriptor_DISTRIBUTION,
-			}
-		}()
-		return respChan, nil
+			},
+		}
+		return metricDescriptorList, nil
 	case "projects/boolean":
-		respChan := make(chan *metricpb.MetricDescriptor, 1)
-		go func() {
-			defer close(respChan)
-			respChan <- &metricpb.MetricDescriptor{
+		metricDescriptorList := []*metricpb.MetricDescriptor{
+			&metricpb.MetricDescriptor{
 				Type:      "testing/boolean",
 				ValueType: metricpb.MetricDescriptor_BOOL,
-			}
-		}()
-		return respChan, nil
+			},
+		}
+		return metricDescriptorList, nil
 	case "projects/int64":
-		respChan := make(chan *metricpb.MetricDescriptor, 1)
-		go func() {
-			defer close(respChan)
-			respChan <- &metricpb.MetricDescriptor{
+		metricDescriptorList := []*metricpb.MetricDescriptor{
+			&metricpb.MetricDescriptor{
 				Type:      "testing/int64",
 				ValueType: metricpb.MetricDescriptor_INT64,
-			}
-		}()
-		return respChan, nil
+			},
+		}
+		return metricDescriptorList, nil
 	case "projects/double":
-		respChan := make(chan *metricpb.MetricDescriptor, 1)
-		go func() {
-			defer close(respChan)
-			respChan <- &metricpb.MetricDescriptor{
+		metricDescriptorList := []*metricpb.MetricDescriptor{
+			&metricpb.MetricDescriptor{
 				Type:      "testing/double",
 				ValueType: metricpb.MetricDescriptor_DOUBLE,
-			}
-		}()
-		return respChan, nil
+			},
+		}
+		return metricDescriptorList, nil
 	case "projects/string":
-		respChan := make(chan *metricpb.MetricDescriptor, 1)
-		go func() {
-			defer close(respChan)
-			respChan <- &metricpb.MetricDescriptor{
+		metricDescriptorList := []*metricpb.MetricDescriptor{
+			&metricpb.MetricDescriptor{
 				Type:      "testing/string",
 				ValueType: metricpb.MetricDescriptor_STRING,
-			}
-		}()
-		return respChan, nil
+			},
+		}
+		return metricDescriptorList, nil
 	}
 	return nil, nil
 }
 
 func (c *mockGatherStackdriverClient) ListTimeSeries(
-	ctx context.Context,
 	req *monitoringpb.ListTimeSeriesRequest,
-) (<-chan *monitoringpb.TimeSeries, error) {
+) ([]*monitoringpb.TimeSeries, error) {
 	point := &monitoringpb.Point{
 		Interval: &monitoringpb.TimeInterval{
 			EndTime: &timestamp.Timestamp{
@@ -113,116 +99,91 @@ func (c *mockGatherStackdriverClient) ListTimeSeries(
 	}
 
 	switch req.Name {
-	case "listTimeSeriesError":
+	case "projects/listTimeSeriesError":
 		return nil, errors.New("List TimeSeries Error")
 	case "projects/distribution":
-		respChan := make(chan *monitoringpb.TimeSeries)
-		go func() {
-			defer close(respChan)
-			value := &monitoringpb.TypedValue_DistributionValue{
-				DistributionValue: &distribution.Distribution{},
-			}
-			value.DistributionValue.Count = 1
-			value.DistributionValue.Mean = 1.0
-			value.DistributionValue.SumOfSquaredDeviation = 1.0
-			value.DistributionValue.Range = &distribution.Distribution_Range{
-				Min: 1.0,
-				Max: 1.0,
-			}
-			value.DistributionValue.BucketCounts = []int64{1, 1}
-			if strings.Contains(req.Filter, "LinearBuckets") {
-				value.DistributionValue.BucketOptions = &distribution.Distribution_BucketOptions{
-					Options: &distribution.Distribution_BucketOptions_LinearBuckets{
-						LinearBuckets: &distribution.Distribution_BucketOptions_Linear{
-							NumFiniteBuckets: 3,
-							Width:            1,
-							Offset:           1,
-						},
+		value := &monitoringpb.TypedValue_DistributionValue{
+			DistributionValue: &distribution.Distribution{},
+		}
+		value.DistributionValue.Count = 1
+		value.DistributionValue.Mean = 1.0
+		value.DistributionValue.SumOfSquaredDeviation = 1.0
+		value.DistributionValue.Range = &distribution.Distribution_Range{
+			Min: 1.0,
+			Max: 1.0,
+		}
+		value.DistributionValue.BucketCounts = []int64{1, 1}
+		if strings.Contains(req.Filter, "LinearBuckets") {
+			value.DistributionValue.BucketOptions = &distribution.Distribution_BucketOptions{
+				Options: &distribution.Distribution_BucketOptions_LinearBuckets{
+					LinearBuckets: &distribution.Distribution_BucketOptions_Linear{
+						NumFiniteBuckets: 3,
+						Width:            1,
+						Offset:           1,
 					},
-				}
-			} else if strings.Contains(req.Filter, "ExponentialBuckets") {
-				value.DistributionValue.BucketOptions = &distribution.Distribution_BucketOptions{
-					Options: &distribution.Distribution_BucketOptions_ExponentialBuckets{
-						ExponentialBuckets: &distribution.Distribution_BucketOptions_Exponential{
-							NumFiniteBuckets: 3,
-							GrowthFactor:     2,
-							Scale:            1,
-						},
-					},
-				}
-			} else {
-				value.DistributionValue.BucketOptions = &distribution.Distribution_BucketOptions{
-					Options: &distribution.Distribution_BucketOptions_ExplicitBuckets{
-						ExplicitBuckets: &distribution.Distribution_BucketOptions_Explicit{
-							Bounds: []float64{1.0, 2.0},
-						},
-					},
-				}
+				},
 			}
-			point.Value.Value = value
-			timeSeries.Metric.Labels["name"] = "projects/distribution"
-			timeSeries.Resource.Type = "distribution"
-			timeSeries.Resource.Labels["id"] = "0"
-			timeSeries.ValueType = metricpb.MetricDescriptor_DISTRIBUTION
-			respChan <- timeSeries
-		}()
-		return respChan, nil
+		} else if strings.Contains(req.Filter, "ExponentialBuckets") {
+			value.DistributionValue.BucketOptions = &distribution.Distribution_BucketOptions{
+				Options: &distribution.Distribution_BucketOptions_ExponentialBuckets{
+					ExponentialBuckets: &distribution.Distribution_BucketOptions_Exponential{
+						NumFiniteBuckets: 3,
+						GrowthFactor:     2,
+						Scale:            1,
+					},
+				},
+			}
+		} else {
+			value.DistributionValue.BucketOptions = &distribution.Distribution_BucketOptions{
+				Options: &distribution.Distribution_BucketOptions_ExplicitBuckets{
+					ExplicitBuckets: &distribution.Distribution_BucketOptions_Explicit{
+						Bounds: []float64{1.0, 2.0},
+					},
+				},
+			}
+		}
+		point.Value.Value = value
+		timeSeries.Metric.Labels["name"] = "projects/distribution"
+		timeSeries.Resource.Type = "distribution"
+		timeSeries.Resource.Labels["id"] = "0"
+		timeSeries.ValueType = metricpb.MetricDescriptor_DISTRIBUTION
+		return []*monitoringpb.TimeSeries{timeSeries}, nil
 	case "projects/boolean":
-		respChan := make(chan *monitoringpb.TimeSeries)
-		go func() {
-			defer close(respChan)
-			point.Value.Value = &monitoringpb.TypedValue_BoolValue{
-				BoolValue: true,
-			}
-			timeSeries.Metric.Labels["name"] = "projects/boolean"
-			timeSeries.Resource.Type = "boolean"
-			timeSeries.Resource.Labels["id"] = "1"
-			timeSeries.ValueType = metricpb.MetricDescriptor_BOOL
-			respChan <- timeSeries
-		}()
-		return respChan, nil
+		point.Value.Value = &monitoringpb.TypedValue_BoolValue{
+			BoolValue: true,
+		}
+		timeSeries.Metric.Labels["name"] = "projects/boolean"
+		timeSeries.Resource.Type = "boolean"
+		timeSeries.Resource.Labels["id"] = "1"
+		timeSeries.ValueType = metricpb.MetricDescriptor_BOOL
+		return []*monitoringpb.TimeSeries{timeSeries}, nil
 	case "projects/int64":
-		respChan := make(chan *monitoringpb.TimeSeries)
-		go func() {
-			defer close(respChan)
-			point.Value.Value = &monitoringpb.TypedValue_Int64Value{
-				Int64Value: 1,
-			}
-			timeSeries.Metric.Labels["name"] = "projects/int64"
-			timeSeries.Resource.Type = "int64"
-			timeSeries.Resource.Labels["id"] = "2"
-			timeSeries.ValueType = metricpb.MetricDescriptor_INT64
-			respChan <- timeSeries
-		}()
-		return respChan, nil
+		point.Value.Value = &monitoringpb.TypedValue_Int64Value{
+			Int64Value: 1,
+		}
+		timeSeries.Metric.Labels["name"] = "projects/int64"
+		timeSeries.Resource.Type = "int64"
+		timeSeries.Resource.Labels["id"] = "2"
+		timeSeries.ValueType = metricpb.MetricDescriptor_INT64
+		return []*monitoringpb.TimeSeries{timeSeries}, nil
 	case "projects/double":
-		respChan := make(chan *monitoringpb.TimeSeries)
-		go func() {
-			defer close(respChan)
-			point.Value.Value = &monitoringpb.TypedValue_DoubleValue{
-				DoubleValue: 1.0,
-			}
-			timeSeries.Metric.Labels["name"] = "projects/double"
-			timeSeries.Resource.Type = "double"
-			timeSeries.Resource.Labels["id"] = "3"
-			timeSeries.ValueType = metricpb.MetricDescriptor_DOUBLE
-			respChan <- timeSeries
-		}()
-		return respChan, nil
+		point.Value.Value = &monitoringpb.TypedValue_DoubleValue{
+			DoubleValue: 1.0,
+		}
+		timeSeries.Metric.Labels["name"] = "projects/double"
+		timeSeries.Resource.Type = "double"
+		timeSeries.Resource.Labels["id"] = "3"
+		timeSeries.ValueType = metricpb.MetricDescriptor_DOUBLE
+		return []*monitoringpb.TimeSeries{timeSeries}, nil
 	case "projects/string":
-		respChan := make(chan *monitoringpb.TimeSeries)
-		go func() {
-			defer close(respChan)
-			point.Value.Value = &monitoringpb.TypedValue_StringValue{
-				StringValue: "1",
-			}
-			timeSeries.Metric.Labels["name"] = "projects/string"
-			timeSeries.Resource.Type = "string"
-			timeSeries.Resource.Labels["id"] = "4"
-			timeSeries.ValueType = metricpb.MetricDescriptor_STRING
-			respChan <- timeSeries
-		}()
-		return respChan, nil
+		point.Value.Value = &monitoringpb.TypedValue_StringValue{
+			StringValue: "1",
+		}
+		timeSeries.Metric.Labels["name"] = "projects/string"
+		timeSeries.Resource.Type = "string"
+		timeSeries.Resource.Labels["id"] = "4"
+		timeSeries.ValueType = metricpb.MetricDescriptor_STRING
+		return []*monitoringpb.TimeSeries{timeSeries}, nil
 	}
 	return nil, nil
 }
@@ -264,17 +225,14 @@ func TestListMetricDescriptors(t *testing.T) {
 
 	listMetricDescriptorsReq := &monitoringpb.ListMetricDescriptorsRequest{
 		Name:   fmt.Sprintf("projects/%s", credentials["project_id"]),
-		Filter: `metric.type = "loadbalancing.googleapis.com/tcp_ssl_proxy/open_connections"`,
+		Filter: `metric.type = "loadbalancing.googleapis.com/https/request_count"`,
 	}
-	respChan, err := s.client.ListMetricDescriptors(s.ctx, listMetricDescriptorsReq)
+	metricDescriptorList, err := s.client.ListMetricDescriptors(listMetricDescriptorsReq)
 	if err != nil {
 		return
 	}
-	var count int64
-	for range respChan {
-		count++
-	}
-	require.NotZero(t, count)
+
+	require.NotZero(t, len(metricDescriptorList))
 }
 
 func TestListTimeSeries(t *testing.T) {
@@ -294,21 +252,19 @@ func TestListTimeSeries(t *testing.T) {
 
 	listTimeSeriesReq := &monitoringpb.ListTimeSeriesRequest{
 		Name:   fmt.Sprintf("projects/%s", credentials["project_id"]),
-		Filter: `metric.type = "loadbalancing.googleapis.com/tcp_ssl_proxy/open_connections"`,
+		Filter: `metric.type = "loadbalancing.googleapis.com/https/request_count"`,
 		Interval: &monitoringpb.TimeInterval{
 			EndTime:   &timestamp.Timestamp{Seconds: time.Now().Add(-60 * time.Second).Unix()},
 			StartTime: &timestamp.Timestamp{Seconds: time.Now().Unix() - s.LookbackSeconds},
 		},
 	}
-	respChan, err := s.client.ListTimeSeries(s.ctx, listTimeSeriesReq)
+
+	timeSeriesList, err := s.client.ListTimeSeries(listTimeSeriesReq)
 	if err != nil {
 		return
 	}
-	var count int64
-	for range respChan {
-		count++
-	}
-	require.NotZero(t, count)
+
+	require.NotZero(t, len(timeSeriesList))
 }
 
 func TestInit(t *testing.T) {
@@ -341,7 +297,7 @@ func TestGather(t *testing.T) {
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credentials)
 	s.Project = "listMetricDescriptorsError"
 	s.client = &mockGatherStackdriverClient{}
-	require.Error(t, acc.GatherError(s.Gather))
+	require.EqualError(t, acc.GatherError(s.Gather), "List MetricDescriptors Error")
 }
 
 func TestGatherError(t *testing.T) {
@@ -353,7 +309,7 @@ func TestGatherError(t *testing.T) {
 	}
 
 	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" {
-		require.NoError(t, acc.GatherError(s.Gather))
+		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
 	}
 
 	s.client = &mockGatherStackdriverClient{}
@@ -364,7 +320,7 @@ func TestGatherDistributionLinearBuckets(t *testing.T) {
 	var acc testutil.Accumulator
 
 	s := &Stackdriver{
-		Project:   "projects/distribution",
+		Project:   "distribution",
 		RateLimit: 10,
 		Filter: &ListTimeSeriesFilter{
 			ResourceLabels: []*Label{
@@ -414,7 +370,7 @@ func TestGatherDistributionExponentialBuckets(t *testing.T) {
 	var acc testutil.Accumulator
 
 	s := &Stackdriver{
-		Project:   "projects/distribution",
+		Project:   "distribution",
 		RateLimit: 10,
 		Filter: &ListTimeSeriesFilter{
 			ResourceLabels: []*Label{
@@ -463,7 +419,7 @@ func TestGatherDistributionExplicitBuckets(t *testing.T) {
 	var acc testutil.Accumulator
 
 	s := &Stackdriver{
-		Project:   "projects/distribution",
+		Project:   "distribution",
 		RateLimit: 10,
 		Filter: &ListTimeSeriesFilter{
 			ResourceLabels: []*Label{
@@ -513,7 +469,7 @@ func TestGatherBoolean(t *testing.T) {
 	var acc testutil.Accumulator
 
 	s := &Stackdriver{
-		Project:   "projects/boolean",
+		Project:   "boolean",
 		RateLimit: 10,
 		client:    &mockGatherStackdriverClient{},
 	}
@@ -535,7 +491,7 @@ func TestGatherInt64(t *testing.T) {
 	var acc testutil.Accumulator
 
 	s := &Stackdriver{
-		Project:   "projects/int64",
+		Project:   "int64",
 		RateLimit: 10,
 		client:    &mockGatherStackdriverClient{},
 	}
@@ -557,7 +513,7 @@ func TestGatherDouble(t *testing.T) {
 	var acc testutil.Accumulator
 
 	s := &Stackdriver{
-		Project:   "projects/double",
+		Project:   "double",
 		RateLimit: 10,
 		client:    &mockGatherStackdriverClient{},
 	}
@@ -579,7 +535,7 @@ func TestGatherString(t *testing.T) {
 	var acc testutil.Accumulator
 
 	s := &Stackdriver{
-		Project:   "projects/string",
+		Project:   "string",
 		RateLimit: 10,
 		client:    &mockGatherStackdriverClient{},
 	}
@@ -649,7 +605,7 @@ func TestNewTimeSeriesConf(t *testing.T) {
 	metricType := "testing"
 
 	s := &Stackdriver{
-		Project:         "projects/myproject",
+		Project:         "myproject",
 		LookbackSeconds: 600,
 		Filter: &ListTimeSeriesFilter{
 			ResourceLabels: []*Label{
@@ -703,10 +659,6 @@ func TestInitializeStackdriverClient(t *testing.T) {
 	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" {
 		require.NoError(t, s.initializeStackdriverClient())
 	}
-
-	s = &Stackdriver{}
-	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
-	require.Error(t, s.initializeStackdriverClient())
 
 	s.client = &mockGatherStackdriverClient{}
 	require.NoError(t, s.initializeStackdriverClient())
@@ -768,7 +720,7 @@ func TestGeneratetimeSeriesConfs(t *testing.T) {
 	require.Empty(t, tsConf)
 	require.Error(t, err)
 
-	s.Project = "projects/distribution"
+	s.Project = "distribution"
 	s.ScrapeDistributionBuckets = true
 	s.IncludeMetricTypePrefixes = []string{"testing"}
 	s.DistributionAggregationAligners = []string{
@@ -780,7 +732,7 @@ func TestGeneratetimeSeriesConfs(t *testing.T) {
 	require.NotEmpty(t, tsConf)
 	require.NoError(t, err)
 
-	s.Project = "projects/boolean"
+	s.Project = "boolean"
 	s.IncludeMetricTypePrefixes = nil
 	tsConf, err = s.generatetimeSeriesConfs()
 	require.NotEmpty(t, tsConf)
